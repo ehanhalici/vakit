@@ -8,6 +8,7 @@ let
 in
 pkgs.mkShell {
   buildInputs = [
+    pkgs.bear
   ] ++ libs;
 
   shellHook = ''
