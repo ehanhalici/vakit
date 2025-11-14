@@ -15,15 +15,14 @@
 #define DEG_TO_RAD (M_PI / 180.0)
 #define RAD_TO_DEG (180.0 / M_PI)
 
-// Gözlemci Konumu (Örnek: İstanbul)
-#define OBSERVER_LAT  (38.72868 * DEG_TO_RAD) // Enlem
-#define OBSERVER_LON  (34.38236 * DEG_TO_RAD) // Boylam
 #define OBSERVER_HEIGHT 1054
 
 char *time_zone;
 double altitude, azimuth, sun_angle, sun_x, sun_y;
 tm selected_tm;
 int hour, minute;
+double OBSERVER_LAT = 38.72868; // Enlem
+double OBSERVER_LON = 34.38236; // Boylam
 
 
 #define GET_YEAR(timePoint) int(timePoint.tm_year + 1900)
@@ -110,14 +109,14 @@ void calculate_sun_angle() {
 
     // Compute LAST
     gast = iauGmst06(jd_utc, fjd, jd_utc, fjd);
-    last = gast + OBSERVER_LON; // Ensure OBSERVER_LON is in radians
+    last = gast + (OBSERVER_LON * DEG_TO_RAD); // Ensure OBSERVER_LON is in radians
     last = fmod(last, 2 * M_PI);
     if (last < 0) last += 2 * M_PI;
 
     // Hour angle and altitude
     double ha = last - sun_ra;
-    double sin_alt = sin(OBSERVER_LAT) * sin(sun_dec) + 
-                     cos(OBSERVER_LAT) * cos(sun_dec) * cos(ha);
+    double sin_alt = sin(OBSERVER_LAT * DEG_TO_RAD) * sin(sun_dec) + 
+                     cos(OBSERVER_LAT * DEG_TO_RAD) * cos(sun_dec) * cos(ha);
     altitude = asin(sin_alt) * RAD_TO_DEG;
 
     double pressure_hPa = estimate_pressure(OBSERVER_HEIGHT);
@@ -137,8 +136,8 @@ void calculate_sun_angle() {
     // Azimuth using atan2 for correct quadrant
     double cos_alt = cos(asin(sin_alt));
     double sin_az = -sin(ha) * cos(sun_dec);
-    double cos_az = (sin(sun_dec) - sin_alt * sin(OBSERVER_LAT)) / 
-                    (cos_alt * cos(OBSERVER_LAT));
+    double cos_az = (sin(sun_dec) - sin_alt * sin(OBSERVER_LAT * DEG_TO_RAD)) / 
+                    (cos_alt * cos(OBSERVER_LAT * DEG_TO_RAD));
     azimuth = atan2(sin_az, cos_az) * RAD_TO_DEG;
     if (azimuth < 0) azimuth += 360.0;
     
@@ -175,37 +174,40 @@ void DrawSun(ImDrawList* draw_list, ImVec2 center, float radius) {
     ImGui::Text("sun X: %.2f°", sun_x);
     ImGui::Text("x: %.2f°", cos(sun_x));
     // Güneş'i çember olarak çiz
-    int sun_size = 10;
+    int sun_size = 7;
     draw_list->AddCircleFilled(ImVec2(x, y), sun_size, IM_COL32(255, 255, 0, 255));
     int line_long = 250;
-    draw_list->AddLine(ImVec2(center.x-line_long, center.y), ImVec2(center.x+line_long, center.y), IM_COL32(0, 255, 0, 255), sun_size*2);
+    draw_list->AddLine(ImVec2(center.x-line_long, center.y), ImVec2(center.x+line_long, center.y), IM_COL32(0, 255, 0, 255), sun_size*1.8);
 }
 
 void render_ui() {
     ImGui::Begin("Günes Acisi Hesaplayici");
 
-    if (ImGui::DatePicker("Date", selected_tm))
-    {
+    ImGui::InputDouble("Enlem" , &OBSERVER_LAT, 0.1, 1,  "%.8f");
+    ImGui::InputDouble("Boylam", &OBSERVER_LON, 0.1, 1,  "%.8f");
+    ImGui::DatePicker("Date", selected_tm);
+    // if (ImGui::DatePicker("Date", selected_tm))
+    // {
         //selected_tm.tm_mon += 1;
         // Perform some event whenever the date 't' is changed
-    }
+    // }   
     //ImGui::SliderInt("Saat", &hour, 0, 23);
     //ImGui::SliderInt("Dakika", &minute, 0, 59);
 
-// Saat ayarı
-ImGui::InputInt("Saat", &hour, 1, 1, ImGuiInputTextFlags_CharsDecimal);
-hour = (hour + 24) % 24;  // 0-23 sınırları içinde tut
+    // Saat ayarı
+    ImGui::InputInt("Saat", &hour, 1, 1, ImGuiInputTextFlags_CharsDecimal);
+    hour = (hour + 24) % 24;  // 0-23 sınırları içinde tut
 
-// Dakika ayarı (otomatik saat güncelleme)
-int prev_minute = minute;
-ImGui::InputInt("Dakika", &minute, 1, 5, ImGuiInputTextFlags_CharsDecimal);
-if (minute >= 60) {
-    minute = 0;
-    hour = (hour + 1) % 24;  // Dakika 60 olunca saat artar
-} else if (minute < 0) {
-    minute = 59;
-    hour = (hour - 1 + 24) % 24;  // Dakika -1 olunca saat azalır
-}
+    // Dakika ayarı (otomatik saat güncelleme)
+    int prev_minute = minute;
+    ImGui::InputInt("Dakika", &minute, 1, 5, ImGuiInputTextFlags_CharsDecimal);
+    if (minute >= 60) {
+        minute = 0;
+        hour = (hour + 1) % 24;  // Dakika 60 olunca saat artar
+    } else if (minute < 0) {
+        minute = 59;
+        hour = (hour - 1 + 24) % 24;  // Dakika -1 olunca saat azalır
+    }
     
     // ImGui::InputInt("Saat", &hour, 1, 5, ImGuiInputTextFlags_CharsDecimal);
     // hour = (hour + 24) % 24;  // 0-23 arasında sınırla
@@ -282,13 +284,6 @@ int main() {
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
         
-        ImGui::Render();
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        glfwSwapBuffers(window);
     }
     
     ImGui_ImplOpenGL3_Shutdown();
